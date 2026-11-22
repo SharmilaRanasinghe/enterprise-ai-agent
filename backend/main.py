@@ -31,6 +31,7 @@ class ChatResponse(BaseModel):
     intent: str
     trace_id: str
     agent_steps: list[str]
+    sources: list[dict]
 
 
 @app.get("/")
@@ -80,16 +81,33 @@ async def chat(request: ChatRequest):
 
         answer = result["messages"][-1].content
 
+        
         return ChatResponse(
             answer=str(answer),
             session_id=request.session_id,
             intent=result["intent"],
             trace_id=trace_id,
             agent_steps=[
-                "Supervisor: classified request",
-                "Response Agent: generated answer",
+                "Supervisor: knowledge search",
+                "Retrieval Agent: hybrid search completed",
+                "Response Agent: grounded answer generated",
+            ],
+            sources=[
+                {
+                    "citation": i,
+                    "title": doc.get("title", "Untitled"),
+                    "source": doc.get("source", "Unknown"),
+                    "department": doc.get("department", ""),
+                    "text": doc.get("text", ""),
+                    "score": doc.get("score", 0),
+                }
+                for i, doc in enumerate(
+                    result.get("sources", []),
+                    start=1,
+                )
             ],
         )
+
 
     
     except ServerError as exc:
