@@ -85,6 +85,28 @@ if prompt:
                 answer = result["answer"]
                 st.markdown(answer)
 
+
+                sources = result.get("sources", [])
+
+                if sources:
+                    with st.expander(
+                        f"Retrieved Sources ({len(sources)})"
+                    ):
+                        for source in sources:
+                            st.markdown(
+                                f"**[{source['citation']}] "
+                                f"{source['title']}**"
+                            )
+
+                            st.caption(
+                                f"File: {source['source']} | "
+                                f"Department: {source['department']}"
+                            )
+
+                            st.write(source["text"])
+                            st.divider()
+
+
                 st.session_state.messages.append(
                     {
                         "role": "assistant",
