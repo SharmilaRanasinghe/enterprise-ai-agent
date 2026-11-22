@@ -1,0 +1,20 @@
+
+Title: Payment Gateway Recovery Runbook
+Department: Engineering
+Document Type: Runbook
+Access Level: internal
+Created Date: 2026-08-20
+
+When payment gateway errors increase:
+
+1. Check payment processor health.
+2. Review application logs and error rates.
+3. Check API latency and timeout metrics.
+4. Verify circuit-breaker status.
+5. Reduce retry concurrency if downstream systems
+   are overloaded.
+6. Escalate to the incident response team if the
+   problem persists.
+
+After recovery, document the incident and review
+monitoring thresholds.

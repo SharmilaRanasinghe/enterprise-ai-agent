@@ -1,0 +1,25 @@
+
+Title: Payment Gateway Timeout Incident
+Department: Engineering
+Document Type: Incident Report
+Access Level: internal
+Created Date: 2026-08-15
+
+Incident ID: INC-001
+
+On 15 August 2026, the fictional payment gateway
+experienced increased transaction timeouts.
+
+Root Cause:
+A downstream payment processor experienced high
+latency, causing gateway requests to exceed the
+configured timeout threshold.
+
+Resolution:
+The engineering team reduced retry concurrency,
+introduced exponential backoff, and enabled
+circuit-breaker protection.
+
+Prevention:
+Monitor processor latency, configure timeout alerts,
+and review retry policies during incident reviews.

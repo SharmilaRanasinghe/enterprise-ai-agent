@@ -1,0 +1,19 @@
+
+Title: Customer Data Protection Policy
+Department: Compliance
+Document Type: Policy
+Access Level: internal
+Created Date: 2026-07-10
+
+All customer information must be handled securely.
+
+Sensitive payment information must not be written
+to application logs.
+
+Access to customer data must follow the principle
+of least privilege.
+
+Production database access requires authorization.
+
+Security incidents must be reported to the
+security team immediately.
