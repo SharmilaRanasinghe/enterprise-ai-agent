@@ -96,13 +96,6 @@ class HybridRetriever:
             filter=metadata_filter,
         )
 
-        if dense_results.matches:
-            match = dense_results.matches[0]
-            print("MATCH TYPE:", type(match))
-            print("MATCH DATA:", match.to_dict())
-
-        print("PINECONE MATCHES:", dense_results.matches[:1])
-        
         dense_ids = []
         dense_docs = {}
 
