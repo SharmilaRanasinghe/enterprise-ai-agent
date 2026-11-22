@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     google_api_key: str
     gemini_model: str = "gemini-3.6-flash"
+    gemini_fallback_model: str = "gemini-3.7-flash"
 
     langsmith_tracing: bool = True
     langsmith_api_key: str = ""
@@ -12,6 +13,7 @@ class Settings(BaseSettings):
 
     pinecone_api_key: str = ""
     pinecone_index_name: str = "enterprise-knowledge"
+    pinecone_namespace: str = "banking-demo"
 
     model_config = SettingsConfigDict(
         env_file=".env",
