@@ -1,3 +1,9 @@
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(
+    Path(__file__).resolve().parents[2] / ".env"
+)
 
 import logging
 import re
@@ -35,7 +41,7 @@ class AgentState(TypedDict, total=False):
 primary_llm = ChatGoogleGenerativeAI(
     model=settings.gemini_model,
     google_api_key=settings.google_api_key,
-    timeout=30,
+    timeout=15,
     max_retries=1,
 )
 
@@ -277,7 +283,7 @@ internal documents unless they were retrieved.
                 f"Content:\n{doc.get('text', '')}"
             )
             for i, doc in enumerate(
-                documents[:10],
+                documents[:4],
                 start=1,
             )
         )
