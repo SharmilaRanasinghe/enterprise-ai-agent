@@ -11,6 +11,10 @@ from sentence_transformers import SentenceTransformer
 from backend.config import settings
 from scripts.ingest import parse_document, chunk_text
 
+from backend.security.access import (
+    allowed_document_filter,
+    can_access_document,
+)
 
 class HybridRetriever:
     def __init__(self):
@@ -64,16 +68,24 @@ class HybridRetriever:
         query: str,
         top_k: int = 4,
         department: str | None = None,
+        role: str = "viewer",
     ):
         query_vector = self.model.encode(
             query,
             normalize_embeddings=True,
         ).tolist()
 
-        metadata_filter = (
-            {"department": {"$eq": department}}
-            if department else None
-        )
+        access_filter = allowed_document_filter(role)
+
+        if department:
+            metadata_filter = {
+                "$and": [
+                    access_filter,
+                    {"department": {"$eq": department}},
+                ]
+            }
+        else:
+            metadata_filter = access_filter
 
         dense_results = self.index.documents.search(
             namespace=settings.pinecone_namespace,
@@ -147,13 +159,16 @@ class HybridRetriever:
                 key=lambda i: scores[i],
                 reverse=True,
             )
-
+            
             for i in ranked:
                 doc = self.local_docs[i]
 
-                if department and (
-                    doc.get("department") != department
-                ):
+                # Security: check document authorization first
+                if not can_access_document(doc, role):
+                    continue
+
+                # Optional department filtering
+                if department and doc.get("department") != department:
                     continue
 
                 if scores[i] <= 0:
@@ -163,6 +178,7 @@ class HybridRetriever:
 
                 if len(sparse_ids) >= 10:
                     break
+
 
         # Reciprocal Rank Fusion
         rrf_scores = {}
@@ -181,23 +197,39 @@ class HybridRetriever:
             for doc in self.local_docs
         }
 
+        
         results = []
 
-        for doc_id in sorted(
+        # Rank all candidates before limiting the results.
+        ranked_ids = sorted(
             rrf_scores,
             key=rrf_scores.get,
             reverse=True,
-        )[:top_k]:
+        )
+
+        for doc_id in ranked_ids:
             doc = (
                 dense_docs.get(doc_id)
                 or local_lookup.get(doc_id)
             )
 
-            if doc:
-                results.append({
-                    **doc,
-                    "score": rrf_scores[doc_id],
-                })
+            if not doc:
+                continue
+
+            # Defense in depth: never return unauthorized data.
+            if not can_access_document(doc, role):
+                continue
+
+            if department and doc.get("department") != department:
+                continue
+
+            results.append({
+                **doc,
+                "score": rrf_scores[doc_id],
+            })
+
+            if len(results) >= top_k:
+                break
 
         return results
 
@@ -206,12 +238,14 @@ class HybridRetriever:
         query: str,
         top_k: int = 4,
         department: str | None = None,
+        role: str = "viewer",
     ):
         return await asyncio.to_thread(
             self.search_sync,
             query,
             top_k,
             department,
+            role,
         )
 
 
