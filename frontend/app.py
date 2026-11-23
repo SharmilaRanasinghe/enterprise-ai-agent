@@ -12,14 +12,10 @@ API_URL = "http://localhost:8000"
 def stream_chat(message: str, session_id: str):
     """Stream and parse SSE events from FastAPI."""
 
-    api_key = os.getenv("ENTERPRISE_API_KEY", "")
-
     headers = {
         "Accept": "text/event-stream",
+        "X-API-Key": os.environ["ENTERPRISE_API_KEY"],
     }
-
-    if api_key:
-        headers["X-API-Key"] = api_key
 
     timeout = httpx.Timeout(
         connect=10.0,

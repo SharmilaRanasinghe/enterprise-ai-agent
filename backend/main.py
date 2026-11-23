@@ -12,12 +12,22 @@ import time
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from langchain_core.messages import HumanMessage
 from google.genai.errors import ServerError
 
 from backend.agents.graph import graph
 
+from fastapi import Depends
+from backend.security.auth import (
+    CurrentUser,
+    get_current_user,
+)
+import hashlib
+import hmac
+
+from backend.config import settings
+from backend.security.rate_limit import enforce_rate_limit
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,8 +40,28 @@ app = FastAPI(
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=4000)
-    session_id: str = Field(min_length=1, max_length=128)
+    message: str = Field(
+        min_length=1,
+        max_length=4000,
+    )
+
+    session_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError(
+                "Message cannot be empty"
+            )
+
+        return value
 
 
 class ChatResponse(BaseModel):
@@ -41,6 +71,19 @@ class ChatResponse(BaseModel):
     trace_id: str
     agent_steps: list[str]
     sources: list[dict]
+
+
+def secure_thread_id(
+    user_id: str,
+    session_id: str,
+) -> str:
+    """Generate a user-specific LangGraph thread ID."""
+
+    return hmac.new(
+        settings.session_hmac_secret.encode(),
+        f"{user_id}:{session_id}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 @app.get("/")
@@ -57,12 +100,16 @@ async def health():
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest,
+               user: CurrentUser = Depends(enforce_rate_limit)):
     trace_id = str(uuid.uuid4())
 
     config = {
         "configurable": {
-            "thread_id": request.session_id,
+            "thread_id": secure_thread_id(
+                user.user_id,
+                request.session_id,
+            ),
         },
         "run_name": "enterprise-chat",
         "tags": ["poc", "gemini"],
@@ -84,13 +131,15 @@ async def chat(request: ChatRequest):
                     HumanMessage(content=request.message)
                 ],
                 "intent": "",
+                "user_id": user.user_id,
+                "user_role": user.role,
             },
             config=config,
         )
 
         
         last_message = result["messages"][-1]
-        answer = last_message.text
+        answer = extract_answer(last_message)
 
         if not answer:
             raise ValueError("Gemini returned no text")
@@ -109,7 +158,6 @@ async def chat(request: ChatRequest):
                     "title": doc.get("title", "Untitled"),
                     "source": doc.get("source", "Unknown"),
                     "department": doc.get("department", ""),
-                    "text": doc.get("text", ""),
                     "score": doc.get("score", 0),
                 }
                 for i, doc in enumerate(
@@ -188,7 +236,9 @@ def extract_answer(message) -> str:
 
 
 @app.post("/api/chat/stream")
-async def chat_stream(payload: ChatRequest, request: Request):
+async def chat_stream(payload: ChatRequest, 
+                      request: Request,
+                      user: CurrentUser = Depends(enforce_rate_limit)):
     trace_id = str(uuid.uuid4())
 
     async def event_generator():
@@ -202,7 +252,10 @@ async def chat_stream(payload: ChatRequest, request: Request):
 
         config = {
             "configurable": {
-                "thread_id": payload.session_id,
+                "thread_id": secure_thread_id(
+                    user.user_id,
+                    payload.session_id,
+                ),
             },
             "run_id": uuid.UUID(trace_id),
             "run_name": "enterprise-chat-stream",
@@ -225,6 +278,8 @@ async def chat_stream(payload: ChatRequest, request: Request):
                     "messages": [
                         HumanMessage(content=payload.message)
                     ],
+                    "user_id": user.user_id,
+                    "user_role": user.role,
                 },
                 config=config,
                 stream_mode="updates",

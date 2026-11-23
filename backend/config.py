@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     pinecone_index_name: str = "enterprise-knowledge"
     pinecone_namespace: str = "banking-demo"
 
+    demo_viewer_api_key: str
+    demo_engineer_api_key: str
+    demo_admin_api_key: str
+
+    session_hmac_secret: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
