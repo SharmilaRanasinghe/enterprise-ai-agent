@@ -1,4 +1,4 @@
-
+import json
 import uuid
 
 import httpx
@@ -126,3 +126,60 @@ if prompt:
                 st.caption(str(exc))
 
     st.rerun()
+
+def stream_chat(message: str, session_id: str):
+    """Yield parsed SSE events from FastAPI."""
+
+    with httpx.Client(
+        timeout=httpx.Timeout(
+            connect=10.0,
+            read=180.0,
+            write=10.0,
+            pool=10.0,
+        )
+    ) as client:
+
+        with client.stream(
+            "POST",
+            f"{API_URL}/api/chat/stream",
+            json={
+                "message": message,
+                "session_id": session_id,
+            },
+            headers={
+                "Accept": "text/event-stream",
+            },
+        ) as response:
+
+            response.raise_for_status()
+
+            event_name = None
+            data_lines = []
+
+            for line in response.iter_lines():
+
+                if line.startswith("event:"):
+                    event_name = line[6:].strip()
+
+                elif line.startswith("data:"):
+                    data_lines.append(line[5:].strip())
+
+                elif line == "":
+                    if event_name and data_lines:
+                        yield {
+                            "event": event_name,
+                            "data": json.loads(
+                                "\n".join(data_lines)
+                            ),
+                        }
+
+                    event_name = None
+                    data_lines = []
+
+            if event_name and data_lines:
+                yield {
+                    "event": event_name,
+                    "data": json.loads(
+                        "\n".join(data_lines)
+                    ),
+                }

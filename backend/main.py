@@ -1,8 +1,12 @@
 
 import logging
 import uuid
+import asyncio
+import json
+import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage
 from google.genai.errors import ServerError
@@ -142,3 +146,199 @@ async def chat(request: ChatRequest):
                 f"Reference: {trace_id}"
             ),
         )
+
+
+def sse_event(event_name: str, data: dict) -> str:
+    """Encode one Server-Sent Event."""
+    return (
+        f"event: {event_name}\n"
+        f"data: {json.dumps(data, default=str)}\n\n"
+    )
+
+
+def extract_answer(message) -> str:
+    """Extract plain text from Gemini AIMessage."""
+    text = getattr(message, "text", None)
+
+    if callable(text):
+        text = text()
+
+    if isinstance(text, str) and text:
+        return text
+
+    content = getattr(message, "content", "")
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        return "\n".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict)
+            and block.get("type") == "text"
+        )
+
+    return ""
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(payload: ChatRequest, request: Request):
+    trace_id = str(uuid.uuid4())
+
+    async def event_generator():
+        started = time.perf_counter()
+        last_update = started
+
+        intent = "unknown"
+        sources = []
+        agent_steps = []
+        answer = ""
+
+        config = {
+            "configurable": {
+                "thread_id": payload.session_id,
+            },
+            "run_id": uuid.UUID(trace_id),
+            "run_name": "enterprise-chat-stream",
+            "tags": ["milestone-4", "streaming"],
+            "metadata": {
+                "session_id": payload.session_id,
+                "trace_id": trace_id,
+            },
+        }
+
+        yield sse_event("started", {
+            "trace_id": trace_id,
+            "session_id": payload.session_id,
+            "message": "Agent workflow started",
+        })
+
+        try:
+            async for update in graph.astream(
+                {
+                    "messages": [
+                        HumanMessage(content=payload.message)
+                    ],
+                },
+                config=config,
+                stream_mode="updates",
+            ):
+                if await request.is_disconnected():
+                    logger.info(
+                        "Client disconnected trace=%s",
+                        trace_id,
+                    )
+                    return
+
+                now = time.perf_counter()
+
+                for node_name, node_output in update.items():
+                    if not isinstance(node_output, dict):
+                        continue
+
+                    duration_ms = round(
+                        (now - last_update) * 1000,
+                        2,
+                    )
+                    last_update = now
+
+                    if "intent" in node_output:
+                        intent = node_output["intent"]
+
+                    if "sources" in node_output:
+                        sources = node_output["sources"]
+
+                    if "agent_steps" in node_output:
+                        agent_steps = node_output["agent_steps"]
+
+                    if node_name == "response":
+                        messages = node_output.get(
+                            "messages", []
+                        )
+
+                        if messages:
+                            answer = extract_answer(
+                                messages[-1]
+                            )
+
+                    yield sse_event("agent_update", {
+                        "agent": node_name,
+                        "duration_ms": duration_ms,
+                        "intent": intent,
+                        "source_count": len(sources),
+                        "research_step": node_output.get(
+                            "research_step"
+                        ),
+                        "message": (
+                            agent_steps[-1]
+                            if agent_steps
+                            else f"{node_name} completed"
+                        ),
+                    })
+
+            if not answer:
+                raise RuntimeError(
+                    "Workflow completed without an answer"
+                )
+
+            yield sse_event("completed", {
+                "answer": answer,
+                "session_id": payload.session_id,
+                "intent": intent,
+                "trace_id": trace_id,
+                "agent_steps": agent_steps,
+                "sources": [
+                    {
+                        "citation": i,
+                        "title": doc.get(
+                            "title", "Untitled"
+                        ),
+                        "source": doc.get(
+                            "source", "Unknown"
+                        ),
+                        "department": doc.get(
+                            "department", ""
+                        ),
+                        "score": doc.get("score", 0),
+                    }
+                    for i, doc in enumerate(
+                        sources[:10], start=1
+                    )
+                ],
+                "total_duration_ms": round(
+                    (time.perf_counter() - started)
+                    * 1000,
+                    2,
+                ),
+            })
+
+        except asyncio.CancelledError:
+            logger.info(
+                "Stream cancelled trace=%s",
+                trace_id,
+            )
+            raise
+
+        except Exception:
+            logger.exception(
+                "Streaming chat failed trace=%s",
+                trace_id,
+            )
+
+            yield sse_event("error", {
+                "trace_id": trace_id,
+                "message": (
+                    "The assistant could not complete "
+                    "this request. Please retry."
+                ),
+            })
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
