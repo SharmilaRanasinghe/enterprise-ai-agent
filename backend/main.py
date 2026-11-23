@@ -79,19 +79,21 @@ async def chat(request: ChatRequest):
             config=config,
         )
 
-        answer = result["messages"][-1].content
-
         
+        last_message = result["messages"][-1]
+        answer = last_message.text
+
+        if not answer:
+            raise ValueError("Gemini returned no text")
+
+        source_docs = result.get("sources", [])[:10]
+
         return ChatResponse(
-            answer=str(answer),
+            answer=answer,
             session_id=request.session_id,
             intent=result["intent"],
             trace_id=trace_id,
-            agent_steps=[
-                "Supervisor: knowledge search",
-                "Retrieval Agent: hybrid search completed",
-                "Response Agent: grounded answer generated",
-            ],
+            agent_steps=result.get("agent_steps", []),
             sources=[
                 {
                     "citation": i,
@@ -102,7 +104,7 @@ async def chat(request: ChatRequest):
                     "score": doc.get("score", 0),
                 }
                 for i, doc in enumerate(
-                    result.get("sources", []),
+                    source_docs,
                     start=1,
                 )
             ],
