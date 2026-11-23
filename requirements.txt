@@ -21,3 +21,5 @@ pytest-asyncio
 sentence-transformers
 rank-bm25
 numpy
+
+grandalf
