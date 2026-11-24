@@ -1,0 +1,66 @@
+{
+  "summary": {
+    "total_cases": 4,
+    "passed_cases": 4,
+    "failed_cases": 0,
+    "pass_rate_pct": 100.0,
+    "average_groundedness_score": 5.0
+  },
+  "results": [
+    {
+      "id": "eval-002",
+      "groundedness_score": 5,
+      "supported_claims": [
+        "The payment gateway incident (INC-001) was caused by a downstream payment processor experiencing high latency.",
+        "The downstream latency caused gateway requests to exceed the configured timeout threshold."
+      ],
+      "unsupported_claims": [],
+      "explanation": "The candidate answer accurately reflects the root cause documented in the provided incident report (incident_001.txt).",
+      "passed": true
+    },
+    {
+      "id": "eval-003",
+      "groundedness_score": 5,
+      "supported_claims": [
+        "The Payment Gateway Recovery Runbook outlines steps to take when payment gateway errors increase.",
+        "Assessment includes checking payment processor health, reviewing application logs and error rates, and examining API latency and timeout metrics.",
+        "System verification includes checking the status of circuit-breakers.",
+        "Mitigation includes reducing retry concurrency if downstream systems are overloaded.",
+        "Escalation to the incident response team is required if the issue persists.",
+        "Post-incident procedures involve documenting the incident and reviewing monitoring thresholds."
+      ],
+      "unsupported_claims": [],
+      "explanation": "The candidate answer accurately reflects the steps listed in the provided Payment Gateway Recovery Runbook.",
+      "passed": true
+    },
+    {
+      "id": "eval-004",
+      "groundedness_score": 5,
+      "supported_claims": [
+        "The payment gateway incident (INC-001) occurred on 15 August 2026 and involved increased transaction timeouts.",
+        "The root cause was high latency from a downstream payment processor exceeding timeout thresholds.",
+        "The resolution included reducing retry concurrency, introducing exponential backoff, and enabling circuit-breaker protection.",
+        "Preventive actions include monitoring processor latency and establishing timeout alerts.",
+        "Preventive actions include reviewing retry policies during post-mortems.",
+        "Operational procedures include reviewing logs, checking API latency/timeout metrics, and verifying circuit-breaker status."
+      ],
+      "unsupported_claims": [],
+      "explanation": "All claims in the candidate answer are directly supported by the retrieved documentation in incident_001.txt and runbook_001.txt.",
+      "passed": true
+    },
+    {
+      "id": "eval-008",
+      "groundedness_score": 5,
+      "supported_claims": [
+        "All customer information must be handled securely.",
+        "Sensitive payment information is prohibited from being written to application logs.",
+        "Access to customer data must strictly follow the principle of least privilege.",
+        "Access to production databases requires authorization.",
+        "Any security incidents must be reported to the security team immediately."
+      ],
+      "unsupported_claims": [],
+      "explanation": "The candidate answer accurately reflects the content provided in the Customer Data Protection Policy (policy_001.txt) with no deviations or unsupported information.",
+      "passed": true
+    }
+  ]
+}
