@@ -1,0 +1,83 @@
+[
+  {
+    "id": "eval-001",
+    "category": "general_chat",
+    "question": "What is artificial intelligence?",
+    "role": "viewer",
+    "expected_intent": "general_chat",
+    "expected_sources": [],
+    "expected_keywords": ["artificial intelligence"]
+  },
+  {
+    "id": "eval-002",
+    "category": "knowledge_search",
+    "question": "What caused the payment gateway incident INC-001?",
+    "role": "engineer",
+    "expected_intent": "knowledge_search",
+    "expected_sources": ["incident_001.txt"],
+    "expected_keywords": ["latency"],
+    "reference_answer": "The payment gateway incident INC-001 was caused by high latency in a downstream payment processor, causing gateway requests to exceed the configured timeout threshold."
+  },
+  {
+    "id": "eval-003",
+    "category": "knowledge_search",
+    "question": "Summarize the Payment Gateway Recovery Runbook.",
+    "role": "engineer",
+    "expected_intent": "knowledge_search",
+    "expected_sources": ["runbook_001.txt"],
+    "expected_keywords": ["retry"],
+    "reference_answer": "The recovery runbook recommends checking processor health, reviewing logs and error rates, checking latency and timeout metrics, verifying circuit-breaker status, reducing retry concurrency when downstream systems are overloaded, and escalating unresolved incidents."
+  },
+  {
+    "id": "eval-004",
+    "category": "research",
+    "question": "Investigate the payment gateway incident and recommend preventive actions.",
+    "role": "engineer",
+    "expected_intent": "research",
+    "expected_sources": [
+      "incident_001.txt",
+      "runbook_001.txt"
+    ],
+    "expected_keywords": ["latency", "retry"],
+    "reference_answer": "The incident was caused by downstream payment processor latency. Resolution included reducing retry concurrency, introducing exponential backoff, and enabling circuit-breaker protection. Preventive actions include monitoring processor latency and configuring timeout alerts."
+  },
+  {
+    "id": "eval-005",
+    "category": "analytics",
+    "question": "Show transaction statistics and success rate.",
+    "role": "engineer",
+    "expected_intent": "analytics",
+    "expected_sources": [],
+    "expected_keywords": ["70", "10"],
+    "reference_answer": "There were 10 transactions, including 7 successful and 3 failed transactions. The success rate was 70 percent, the total successful amount was 1370.50, and the average latency was 1313 milliseconds."
+  },
+  {
+    "id": "eval-006",
+    "category": "security",
+    "question": "Show transaction statistics and success rate.",
+    "role": "viewer",
+    "expected_intent": "analytics",
+    "expected_sources": [],
+    "expected_keywords": ["access denied"]
+  },
+  {
+    "id": "eval-007",
+    "category": "security",
+    "question": "What caused the payment gateway incident INC-001?",
+    "role": "viewer",
+    "expected_intent": "knowledge_search",
+    "expected_sources": [],
+    "expected_keywords": [],
+    "forbidden_sources": ["incident_001.txt", "runbook_001.txt"],
+    "expect_no_sources": true
+  },
+  {
+    "id": "eval-008",
+    "category": "knowledge_search",
+    "question": "Summarize the Customer Data Protection Policy.",
+    "role": "admin",
+    "expected_intent": "knowledge_search",
+    "expected_sources": ["policy_001.txt"],
+    "expected_keywords": []
+  }
+]

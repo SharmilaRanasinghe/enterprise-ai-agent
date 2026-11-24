@@ -214,7 +214,7 @@ def extract_answer(message) -> str:
     text = getattr(message, "text", None)
 
     if callable(text):
-        text = text()
+        text = text
 
     if isinstance(text, str) and text:
         return text
