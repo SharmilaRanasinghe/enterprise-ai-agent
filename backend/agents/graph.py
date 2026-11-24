@@ -1,3 +1,4 @@
+import csv
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -23,6 +24,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from backend.config import settings
 from backend.rag.retriever import retriever
 
+from backend.tools.analytics import analyze_transactions
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,7 @@ class AgentState(TypedDict, total=False):
     agent_steps: list[str]
     user_id: str
     user_role: str
+    analytics_result: dict
 
 
 primary_llm = ChatGoogleGenerativeAI(
@@ -95,6 +98,22 @@ def latest_question(state: AgentState) -> str:
 
 def classify_intent(question: str) -> str:
     q = question.lower().strip()
+
+    analytics_terms = (
+        "transaction statistics",
+        "transaction metrics",
+        "success rate",
+        "failure rate",
+        "average latency",
+        "total transactions",
+        "transaction volume",
+        "payment statistics",
+        "analyze transactions",
+        "analyse transactions",
+    )
+
+    if any(term in q for term in analytics_terms):
+        return "analytics"
 
     research_terms = (
         "investigate",
@@ -194,6 +213,7 @@ async def supervisor_agent(state: AgentState):
     return {
         "intent": intent,
         "sources": [],
+        "analytics_result": {},
         "research_queries": [],
         "research_step": 0,
         "agent_steps": [
@@ -297,11 +317,80 @@ def research_next(state: AgentState):
 
 
 
+async def analytics_agent(state: AgentState):
+    if state.get("user_role") not in {"engineer", "admin"}:
+        return {
+            "analytics_result": {
+                "error": "Analytics access denied"
+            },
+            "agent_steps": [
+                *state.get("agent_steps", []),
+                "Analytics Agent: access denied",
+            ],
+        }
+
+    try:
+        result = await analyze_transactions.ainvoke({})
+
+    except (OSError, ValueError, KeyError, csv.Error):
+        logger.exception("Analytics tool execution failed")
+
+        return {
+            "analytics_result": {
+                "error": "Analytics data is temporarily unavailable."
+            },
+            "agent_steps": [
+                *state.get("agent_steps", []),
+                "Analytics Agent: execution failed",
+            ],
+        }
+
+    return {
+        "analytics_result": result,
+        "agent_steps": [
+            *state.get("agent_steps", []),
+            "Analytics Agent: transaction statistics calculated",
+        ],
+    }
+
+
+
 async def response_agent(state: AgentState):
     intent = state.get("intent", "general_chat")
     documents = state.get("sources", [])
 
-    if intent == "general_chat":
+    if intent == "analytics":
+        result = state.get("analytics_result", {})
+
+        if result.get("error"):
+            from langchain_core.messages import AIMessage
+
+            return {
+                "messages": [
+                    AIMessage(content=result["error"])
+                ],
+                "agent_steps": [
+                    *state.get("agent_steps", []),
+                    "Response Agent: analytics request unsuccessful",
+                ],
+            }
+
+        system_prompt = f"""
+You are an enterprise payment analytics assistant.
+
+{SECURITY_INSTRUCTIONS}
+
+Use ONLY the verified analytics results below.
+Do not invent additional metrics.
+Do not claim these values represent live production data.
+
+ANALYTICS RESULTS:
+{result}
+
+Explain the results clearly and concisely.
+"""
+    
+    elif intent == "general_chat":
         system_prompt = f"""
 You are a helpful enterprise AI assistant.
 
@@ -430,6 +519,7 @@ builder.add_node("supervisor", supervisor_agent)
 builder.add_node("retrieval", retrieval_agent)
 builder.add_node("research_planner", research_planner)
 builder.add_node("research", research_agent)
+builder.add_node("analytics", analytics_agent)
 builder.add_node("response", response_agent)
 
 builder.add_edge(START, "supervisor")
@@ -441,11 +531,13 @@ builder.add_conditional_edges(
         "general_chat": "response",
         "knowledge_search": "retrieval",
         "research": "research_planner",
+        "analytics": "analytics",
     },
 )
 
 builder.add_edge("retrieval", "response")
 builder.add_edge("research_planner", "research")
+builder.add_edge("analytics", "response")
 
 builder.add_conditional_edges(
     "research",
